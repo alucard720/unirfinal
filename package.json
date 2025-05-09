@@ -1,0 +1,23 @@
+{
+  "name": "unir_final",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "csv-parse": "^5.6.0",
+    "csv-stringify": "^6.5.2",
+    "fs": "^0.0.1-security",
+    "googleapis": "^148.0.0",
+    "image-hash": "^5.3.2",
+    "md5-file": "^5.0.0",
+    "path": "^0.12.7",
+    "sqlite3": "^5.1.7",
+    "util": "^0.12.5"
+  }
+}

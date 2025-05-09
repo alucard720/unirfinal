@@ -1,0 +1,45 @@
+- name: Organize .mp4 and .jpg files
+  hosts: localhost
+  collections:
+    - community.general
+  gather_facts: false
+  vars:
+    file_path: "../file_inventory.csv"
+    log_file: "../pipeline.log"
+    base_dir: "archivos"
+
+  tasks:
+    - name: Check if file_inventory.csv exists
+      ansible.builtin.stat:
+        path: "{{ file_path }}"
+      register: csv_stat
+
+    - name: Log CSV missing warning
+      ansible.builtin.shell: |
+        echo "Warning: {{ file_path }} not found, skipping file organization: $(date)" >> "{{ log_file }}"
+      when: not csv_stat.stat.exists | default(false)
+
+    - name: Log start
+      ansible.builtin.shell: |
+        echo "Starting file organization: $(date)" >> "{{ log_file }}"
+      when: csv_stat.stat.exists | default(false)
+
+    - name: Read inventory CSV
+      ansible.builtin.slurp:
+        src: "{{ file_path }}"
+      register: csv_content
+      when: csv_stat.stat.exists | default(false)
+
+    - name: Parse CSV
+      set_fact:
+        files: "{{ (csv_content.content | b64decode | community.general.from_csv) }}"
+      delegate_to: localhost
+      when: csv_stat.stat.exists | default(false)
+
+    - name: Create target folders
+      ansible.builtin.file:
+        path: "{{ base_dir }}/{{ item.client }}/{{ item.project }}/{{ 'Videos' if item.extension == '.mp4' else 'Designs' }}"
+        state: directory
+        mode: '0755'
+      loop: "{{ files | unique(attribute='path') }}"
+      when: item.extension in ['.mp4', '.jpg']
