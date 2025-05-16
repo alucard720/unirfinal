@@ -1,0 +1,65 @@
+- name: Organize .mp4 and .jpg files
+  hosts: localhost
+  collections:
+    - community.general
+  gather_facts: false
+  vars:
+    file_path: "../file_inventory.csv"
+    log_file: "../pipeline.log"
+    base_dir: "archivos_organizados"
+
+  tasks:
+    - name: Check if file_inventory.csv exists
+      ansible.builtin.stat:
+        path: "{{ file_path }}"
+      register: csv_stat
+
+    - name: Log CSV missing warning
+      ansible.builtin.shell: |
+        echo "Warning: {{ file_path }} not found, skipping file organization: $(date)" >> "{{ log_file }}"
+      when: not csv_stat.stat.exists | default(false)
+
+    - name: Log start
+      ansible.builtin.shell: |
+        echo "Starting file organization: $(date)" >> "{{ log_file }}"
+      when: csv_stat.stat.exists | default(false)
+
+    - name: Read inventory CSV
+      ansible.builtin.slurp:
+        src: "{{ file_path }}"
+      register: csv_content
+      when: csv_stat.stat.exists | default(false)
+
+    - name: Parse CSV
+      set_fact:
+        files: "{{ (csv_content.content | b64decode | community.general.from_csv) }}"
+      delegate_to: localhost
+      when: csv_stat.stat.exists | default(false)
+
+    - name: Create target folders
+      ansible.builtin.file:
+        path: "{{ base_dir }}/{{ item.client }}/{{ item.project }}/{{ 'Videos' if item.extension == '.mp4' else 'Designs' }}"
+        state: directory
+        mode: '0755'
+      loop: "{{ files | unique(attribute='path') }}"
+      when: item.extension in ['.mp4', '.jpg']
+
+    - name: Move files to target folders
+      ansible.builtin.command: >
+        mv "{{ item.path }}" "{{ base_dir }}/{{ item.client }}/{{ item.project }}/{{ 'Videos' if item.extension == '.mp4' else 'Designs' }}/"
+      loop: "{{ files }}"
+      when: item.extension in ['.mp4', '.jpg']
+      register: move_result
+      ignore_errors: true
+    
+    - name: Log each file move
+      ansible.builtin.shell: |
+        echo "Moved {{ item.item.path }} to {{ base_dir }}/{{ item.item.client }}/{{ item.item.project }}/{{ 'Videos' if item.item.extension == '.mp4' else 'Designs' }}" >> "{{ log_file }}"
+      loop: "{{ move_result.results }}"
+      when: item.rc == 0
+      delegate_to: localhost
+
+    - name: Log completion
+      ansible.builtin.shell: |
+        echo "File organization completed: $(date)" >> "{{ log_file }}"
+      when: csv_stat.stat.exists | default(false)

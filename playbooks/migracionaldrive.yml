@@ -1,0 +1,55 @@
+- name: Migrate files to Google Drive
+  hosts: migration_server
+  vars:
+    app_dir: /app
+    log_file: pipeline.log
+  tasks:
+    - name: Validate files
+      stat:
+        path: "{{ item }}"
+      register: file_stat
+      loop:
+        - scripts/migracionadrive.js
+        - scripts/db.js
+        - credenciales.json
+        - file_inventory.csv
+      failed_when: not file_stat.stat.exists
+      delegate_to: localhost
+
+    - name: Log start
+      ansible.builtin.shell: echo "Starting migration $(date)" >> {{ log_file }}
+      delegate_to: localhost
+
+    - name: Install Node.js
+      package:
+        name: nodejs
+        state: present
+
+    - name: Install npm
+      package:
+        name: npm
+        state: present
+
+    - name: Copy migration scripts and credentials
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        mode: '0644'
+      loop:
+        - { src: 'scripts/', dest: '{{ app_dir }}/scripts/' }
+        - { src: 'credentials.json', dest: '{{ app_dir }}/credentials.json' }
+        - { src: 'file_inventory.csv', dest: '{{ app_dir }}/file_inventory.csv' }
+
+    - name: Install Node.js dependencies
+      npm:
+        path: "{{ app_dir }}"
+        state: present
+
+    - name: Run migration script
+      command: node {{ app_dir }}/scripts/migracionadrive.js {{ app_dir }}/file_inventory.csv
+      register: migration_result
+      failed_when: migration_result.rc != 0
+
+    - name: Log completion
+      ansible.builtin.shell: echo "Migration completed: $(date)" >> {{ log_file }}
+      delegate_to: localhost

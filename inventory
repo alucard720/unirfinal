@@ -1,0 +1,5 @@
+[workstations]
+localhost ansible_connection=local
+
+[migration_server]
+localhost ansible_connection=local
