@@ -1,13 +1,31 @@
 pipeline {
     agent any
-    environment {
-        unirfinal = "${WORKSPACE}"
-        INPUT_DIR = "${WORKSPACE}/archivos"
-        INVENTORY_CSV = "${WORKSPACE}/file_inventory.csv"
-        LOG_FILE = "${WORKSPACE}/pipeline.log"
-        SLACK_ENABLED = "true"
-    }
+    // environment {
+    //     unirfinal = "${WORKSPACE}"
+    //     INPUT_DIR = "${WORKSPACE}/archivos"
+    //     INVENTORY_CSV = "${WORKSPACE}/file_inventory.csv"
+    //     LOG_FILE = "${WORKSPACE}/pipeline.log"
+    //     SLACK_ENABLED = "true"
+    // }
     stages {
+         stages {
+             stage('Install Node.js') {
+                 steps {
+                     sh '''
+                            echo "Installing Node.js..."
+
+                            # Install Node.js 18.x using NodeSource and sudo
+                            curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+                            sudo apt-get update -y
+                            sudo apt-get install -y nodejs
+
+                            echo "Node.js version:"
+                            node -v
+                            echo "NPM version:"
+                            npm -v
+                    '''
+            }
+        }     
         stage('Setup') {
             steps {
                 script {
