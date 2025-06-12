@@ -12,112 +12,53 @@ pipeline {
             steps {
                 script {
                     sh "echo 'Starting pipeline' >> ${LOG_FILE}"
+                    echo "Installing Node.js on macOS..."
+
+                    // Install Node.js using Homebrew (macOS)
+                    sh '''
+                        if ! command -v brew >/dev/null 2>&1; then
+                            echo "Homebrew not found. Installing..."
+                            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+                        fi
+
+                        brew update
+                        brew install node ansible
+                    '''
+
+                    echo "Node.js version:"
+                    sh "node -v"
+                    echo "NPM version:"
+                    sh "npm -v"
+                    echo "Ansible version:"
+                    sh "ansible --version"
+
+                    // Check required tools and files
                     sh "command -v node || { echo 'Node.js not found' >> ${LOG_FILE}; exit 1; }"
-                    sh "command -v ansible || { echo 'Ansible not found' >> ${LOG_FILE}; exit 1; }"                    
+                    sh "command -v ansible || { echo 'Ansible not found' >> ${LOG_FILE}; exit 1; }"
                     sh "test -d ${INPUT_DIR} || { echo 'Input directory ${INPUT_DIR} not found' >> ${LOG_FILE}; exit 1; }"
-                    sh "test -f scripts/db.js || { echo 'db.js script not found' >> ${LOG_FILE}; exit 1; }"
+                    sh "test -f scripts/init_db.js || { echo 'init_db.js script not found' >> ${LOG_FILE}; exit 1; }"
+                    sh "test -f archivosorganizados.yml || { echo 'Ansible playbook not found' >> ${LOG_FILE}; exit 1; }"
+
+                    // Install project dependencies
                     sh "npm install >> ${LOG_FILE} 2>&1"
                     sh "echo 'Setup completed' >> ${LOG_FILE}"
                 }
             }
         }
 
-        stage('Inventory and Classify') {
+        stage('Run Ansible Playbook') {
             steps {
                 script {
                     try {
-                        sh "node scripts/scanyclasifica.js ${INPUT_DIR} ${INVENTORY_CSV} >> ${LOG_FILE} 2>&1"
-                        sh "echo 'Inventory and classification completed' >> ${LOG_FILE}"
+                        echo "Running Ansible playbook..."
+                        sh "ansible-playbook archivosorganizados.yml >> ${LOG_FILE} 2>&1"
+                        sh "echo 'Ansible playbook execution completed' >> ${LOG_FILE}"
                     } catch (Exception e) {
-                        sh "echo 'Error in Inventory and Classify: ${e}' >> ${LOG_FILE}"
-                        error "Inventory and Classify failed: ${e}"
+                        sh "echo 'Error in Ansible Playbook: ${e}' >> ${LOG_FILE}"
+                        error "Ansible Playbook failed: ${e}"
                     }
                 }
             }
         }
-        stage('Deduplicate') {
-            steps {
-                script {
-                    try {
-                        sh "node scripts/deduplicate.js ${INVENTORY_CSV} >> ${LOG_FILE} 2>&1"
-                        sh "echo 'Deduplication report generated' >> ${LOG_FILE}"
-                        // if (env.SLACK_ENABLED == "true") {
-                        //     slackSend(message: "Duplicates detected. Review duplicates_report.csv in ${WORKSPACE}")
-                        // }
-                    } catch (Exception e) {
-                        sh "echo 'Error in Deduplicate: ${e}' >> ${LOG_FILE}"
-                        error "Deduplicate failed: ${e}"
-                    }
-                }
-            }
-        }
-        // stage('Review Duplicates') {
-        //     steps {
-        //         script {
-        //             try {
-        //                 input message: 'Approve duplicate deletion?', ok: 'Yes'
-        //                 sh "node scripts/deduplicate_files.js ${INVENTORY_CSV} --delete >> ${LOG_FILE} 2>&1"
-        //                 sh "echo 'Duplicates deleted' >> ${LOG_FILE}"
-        //             } catch (Exception e) {
-        //                 sh "echo 'Error in Review Duplicates: ${e}' >> ${LOG_FILE}"
-        //                 error "Review Duplicates failed: ${e}"
-        //             }
-        //         }
-        //     }
-        // }
-        // stage('Organize Files') {
-        //     steps {
-        //         script {
-        //             try {
-        //                 sh "ansible-playbook -i inventory playbooks/organize_files.yml >> ${LOG_FILE} 2>&1"
-        //                 sh "echo 'Files organized' >> ${LOG_FILE}"
-        //             } catch (Exception e) {
-        //                 sh "echo 'Error in Organize Files: ${e}' >> ${LOG_FILE}"
-        //                 error "Organize Files failed: ${e}"
-        //             }
-        //         }
-        //     }
-        // }
-        // stage('Migrate to Google Drive') {
-        //     steps {
-        //         script {
-        //             try {
-        //                 sh "ansible-playbook -i inventory playbooks/migrate_to_drive.yml >> ${LOG_FILE} 2>&1"
-        //                 sh "echo 'Migration to Google Drive completed' >> ${LOG_FILE}"
-        //             } catch (Exception e) {
-        //                 sh "echo 'Error in Migrate to Google Drive: ${e}' >> ${LOG_FILE}"
-        //                 error "Migrate to Google Drive failed: ${e}"
-        //             }
-        //         }
-        //     }
-        // }
-        // stage('Verify Migration') {
-        //     steps {
-        //         script {
-        //             try {
-        //                 sh "node scripts/verify_migration.js ${INVENTORY_CSV} >> ${LOG_FILE} 2>&1"
-        //                 sh "echo 'Migration verification completed' >> ${LOG_FILE}"
-        //                 if (env.SLACK_ENABLED == "true") {
-        //                     slackSend(message: "Migration to Google Drive completed. Verification report in ${WORKSPACE_DIR}/migration_verification_report.txt")
-        //                 }
-        //             } catch (Exception e) {
-        //                 sh "echo 'Error in Verify Migration: ${e}' >> ${LOG_FILE}"
-        //                 error "Verify Migration failed: ${e}"
-        //             }
-        //         }
-        //     }
-        // }
     }
-    // post {
-    //     always {
-    //         archiveArtifacts artifacts: 'pipeline.log, file_inventory.csv, duplicates_report.csv, migration_verification_report.txt', allowEmptyArchive: true
-    //     }
-    //     failure {
-    //         script {
-    //             if (env.SLACK_ENABLED == "true") {
-    //                 slackSend(color: 'danger', message: "Pipeline failed. Check ${WORKSPACE_DIR}/pipeline.log for details.")
-    //             }
-    //         }
-    //     }
-    // }
 }

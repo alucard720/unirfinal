@@ -1,10 +1,4 @@
 path,size_mb,extension,hash,client,project
-/var/lib/jenkins/workspace/unirfinal/archivos/apple_airpods_quiet_the_noise (360p).mp4,6.740540504455566,.mp4,ecb2725851c688c5e7b430e9af22461e,ClientA,Campaign2025
-/var/lib/jenkins/workspace/unirfinal/archivos/business-marketing-agency-flyer-design-template-7c42b6afa3821420e482e9b392c4e878.jpg,0.06556034088134766,.jpg,fe00fb006e0c00fe,ClientA,Campaign2025
-/var/lib/jenkins/workspace/unirfinal/archivos/business-marketing-template-design-89473b6937558b4d680e5f35e732c590.jpg,0.044373512268066406,.jpg,287c3e30e06600bf,ClientA,Campaign2025
-/var/lib/jenkins/workspace/unirfinal/archivos/digital-marketing-design-template-c83edeb48aa665a238360c60200c4f73 copy.jpg,0.022543907165527344,.jpg,c4c6e68408ed90f1,ClientA,Campaign2025
-/var/lib/jenkins/workspace/unirfinal/archivos/digital-marketing-design-template-c83edeb48aa665a238360c60200c4f73.jpg,0.022543907165527344,.jpg,c4c6e68408ed90f1,ClientA,Campaign2025
-/var/lib/jenkins/workspace/unirfinal/archivos/digital-marketing-template-design-588a5eec1d3a45347fb24252d0d4e77e.jpg,0.03470039367675781,.jpg,f0e0070f0f0701be,ClientA,Campaign2025
-/var/lib/jenkins/workspace/unirfinal/archivos/video_911).mp4,9.84427261352539,.mp4,19ced0b3bb5e780d7c04ea574e16649a,ClientA,Campaign2025
-/var/lib/jenkins/workspace/unirfinal/archivos/video_volvo.mp4,3.109739303588867,.mp4,be542f6e979dd51a982fd3073093e991,ClientA,Campaign2025
-/var/lib/jenkins/workspace/unirfinal/archivos/videoplayback.mp4,3.6570615768432617,.mp4,14385efe8fb3f076e5ef4ca4aa73a8ad,ClientA,Campaign2025
+archivos/5288798.jpg,0.7566375732421875,.jpg,035b717064667660,ClientA,Campaign2025
+archivos/8282810.jpg,0.5883264541625977,.jpg,ff00ad8181b981ff,ClientA,Campaign2025
+archivos/9129001.jpg,1.7124557495117188,.jpg,e780c18782d65e0c,ClientA,Campaign2025

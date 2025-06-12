@@ -1,57 +1,85 @@
-- name: Organize .mp4 and .jpg files
+---
+- name: Initialize DB, Run Node.js Script, and Organize Files
   hosts: localhost
   collections:
     - community.general
   gather_facts: false
   vars:
+    db_script: "init_db.js"
+    node_script: "scan_and_classify.js"
+    input_dir: "archivos"
     file_path: "../file_inventory.csv"
     log_file: "../pipeline.log"
     base_dir: "archivos_organizados"
 
   tasks:
+    - name: Run DB Initialization Script
+      ansible.builtin.shell: |
+        node {{ db_script }}
+      args:
+        chdir: "{{ playbook_dir }}"
+      register: db_init_result
+
+    - name: Log DB Initialization
+      ansible.builtin.shell: |
+        echo "DB Initialization script executed: $(date)" >> "{{ log_file }}"
+
     - name: Check if file_inventory.csv exists
       ansible.builtin.stat:
         path: "{{ file_path }}"
       register: csv_stat
 
+    - name: Run Node.js script to generate CSV
+      ansible.builtin.shell: |
+        node {{ node_script }} {{ input_dir }} {{ file_path }}
+      args:
+        chdir: "{{ playbook_dir }}"
+      register: node_script_result
+      when: not csv_stat.stat.exists | default(false)
+
+    - name: Log Node.js script execution
+      ansible.builtin.shell: |
+        echo "Node.js script executed: $(date)" >> "{{ log_file }}"
+      when: not csv_stat.stat.exists | default(false)
+
     - name: Log CSV missing warning
       ansible.builtin.shell: |
         echo "Warning: {{ file_path }} not found, skipping file organization: $(date)" >> "{{ log_file }}"
-      when: not csv_stat.stat.exists | default(false)
+      when: not csv_stat.stat.exists | default(false) and (node_script_result.rc | default(1)) != 0
 
-    - name: Log start
+    - name: Log start of file organization
       ansible.builtin.shell: |
         echo "Starting file organization: $(date)" >> "{{ log_file }}"
-      when: csv_stat.stat.exists | default(false)
+      when: csv_stat.stat.exists | default(false) or (node_script_result.rc | default(1)) == 0
 
     - name: Read inventory CSV
       ansible.builtin.slurp:
         src: "{{ file_path }}"
       register: csv_content
-      when: csv_stat.stat.exists | default(false)
+      when: csv_stat.stat.exists | default(false) or (node_script_result.rc | default(1)) == 0
 
     - name: Parse CSV
       set_fact:
         files: "{{ (csv_content.content | b64decode | community.general.from_csv) }}"
       delegate_to: localhost
-      when: csv_stat.stat.exists | default(false)
+      when: csv_stat.stat.exists | default(false) or (node_script_result.rc | default(1)) == 0
 
     - name: Create target folders
       ansible.builtin.file:
         path: "{{ base_dir }}/{{ item.client }}/{{ item.project }}/{{ 'Videos' if item.extension == '.mp4' else 'Designs' }}"
         state: directory
         mode: '0755'
-      loop: "{{ files | unique(attribute='path') }}"
-      when: item.extension in ['.mp4', '.jpg']
+      loop: "{{ (files | default([])) | unique(attribute='path') }}"
+      when: item.extension in ['.mp4', '.jpg'] and files is defined
 
     - name: Move files to target folders
       ansible.builtin.command: >
         mv "{{ item.path }}" "{{ base_dir }}/{{ item.client }}/{{ item.project }}/{{ 'Videos' if item.extension == '.mp4' else 'Designs' }}/"
-      loop: "{{ files }}"
-      when: item.extension in ['.mp4', '.jpg']
+      loop: "{{ files | default([]) }}"
+      when: item.extension in ['.mp4', '.jpg'] and files is defined
       register: move_result
       ignore_errors: true
-    
+
     - name: Log each file move
       ansible.builtin.shell: |
         echo "Moved {{ item.item.path }} to {{ base_dir }}/{{ item.item.client }}/{{ item.item.project }}/{{ 'Videos' if item.item.extension == '.mp4' else 'Designs' }}" >> "{{ log_file }}"
@@ -62,4 +90,4 @@
     - name: Log completion
       ansible.builtin.shell: |
         echo "File organization completed: $(date)" >> "{{ log_file }}"
-      when: csv_stat.stat.exists | default(false)
+      when: csv_stat.stat.exists | default(false) or (node_script_result.rc | default(1)) == 0
