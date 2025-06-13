@@ -5,12 +5,12 @@
     - community.general
   gather_facts: false
   vars:
-    db_script: "init_db.js"
-    node_script: "scan_and_classify.js"
-    input_dir: "archivos"
+    db_script: "../scripts/db.js"
+    node_script: "../scripts/scanyclasifica.js" 
+    input_dir: "../archivos"
     file_path: "../file_inventory.csv"
     log_file: "../pipeline.log"
-    base_dir: "archivos_organizados"
+    base_dir: "../archivos_organizados"
 
   tasks:
     - name: Run DB Initialization Script

@@ -1,82 +1,91 @@
 pipeline {
     agent any
-    // environment {
-    //     unirfinal = "${WORKSPACE}"
-    //     INPUT_DIR = "${WORKSPACE}/archivos"
-    //     INVENTORY_CSV = "${WORKSPACE}/file_inventory.csv"
-    //     LOG_FILE = "${WORKSPACE}/pipeline.log"
-    //     SLACK_ENABLED = "true"
-    // }
+
+    environment {
+        unirfinal = "${WORKSPACE}"
+        INPUT_DIR = "${WORKSPACE}/archivos"
+        INVENTORY_CSV = "${WORKSPACE}/file_inventory.csv"
+        LOG_FILE = "${WORKSPACE}/pipeline.log"
+        SLACK_ENABLED = "true"
+        // Inject Node and NPM path globally
+        PATH_NODE = "/usr/local/bin"
+        PATH_ANSIBLE = "/Library/Frameworks/Python.framework/Versions/3.13/bin"
+    }
+
     stages {
-         stages {
-             stage('Install Node.js') {
-                 steps {
-                     sh '''
-                            echo "Installing Node.js..."
-
-                            # Install Node.js 18.x using NodeSource and sudo
-                            curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-                            sudo apt-get update -y
-                            sudo apt-get install -y nodejs
-
-                            echo "Node.js version:"
-                            node -v
-                            echo "NPM version:"
-                            npm -v
-                    '''
-            }
-        }     
         stage('Setup') {
             steps {
                 script {
                     sh "echo 'Starting pipeline' >> ${LOG_FILE}"
-                    echo "Installing Node.js on macOS..."
 
-                    // Install Node.js using Homebrew (macOS)
-                    sh '''
-                        if ! command -v brew >/dev/null 2>&1; then
-                            echo "Homebrew not found. Installing..."
-                            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-                        fi
+                    // Validate Node.js and Ansible installation
+                    sh "${PATH_NODE}/node -v || { echo 'Node.js not found' >> ${LOG_FILE}; exit 1; }"
+                    // sh "${PATH_NODE}/npm -v || { echo 'npm not found' >> ${LOG_FILE}; exit 1; }"
+                    sh "${PATH_ANSIBLE}/ansible --version || { echo 'Ansible not found' >> ${LOG_FILE}; exit 1; }"
 
-                        brew update
-                        brew install node ansible
-                    '''
-
-                    echo "Node.js version:"
-                    sh "node -v"
-                    echo "NPM version:"
-                    sh "npm -v"
-                    echo "Ansible version:"
-                    sh "ansible --version"
-
-                    // Check required tools and files
-                    sh "command -v node || { echo 'Node.js not found' >> ${LOG_FILE}; exit 1; }"
-                    sh "command -v ansible || { echo 'Ansible not found' >> ${LOG_FILE}; exit 1; }"
+                    // Validate required files
                     sh "test -d ${INPUT_DIR} || { echo 'Input directory ${INPUT_DIR} not found' >> ${LOG_FILE}; exit 1; }"
-                    sh "test -f scripts/init_db.js || { echo 'init_db.js script not found' >> ${LOG_FILE}; exit 1; }"
-                    sh "test -f archivosorganizados.yml || { echo 'Ansible playbook not found' >> ${LOG_FILE}; exit 1; }"
+                    sh "test -f ${WORKSPACE}/scripts/db.js || { echo 'db.js script not found' >> ${LOG_FILE}; exit 1; }"
 
-                    // Install project dependencies
-                    sh "npm install >> ${LOG_FILE} 2>&1"
+                    // Install Node.js dependencies
+                    // sh "${PATH_NODE}/npm install >> ${LOG_FILE} 2>&1"
+
+                    // Initialize the database
+                    sh "${PATH_NODE}/node ${WORKSPACE}/scripts/db.js >> ${LOG_FILE} 2>&1"
+
                     sh "echo 'Setup completed' >> ${LOG_FILE}"
                 }
             }
         }
 
-        stage('Run Ansible Playbook') {
+        // Uncomment if needed
+        // stage('Inventory and Classify') {
+        //     steps {
+        //         script {
+        //             try {
+        //                 sh "${PATH_NODE}/node ${WORKSPACE}/scripts/scanyclasifica.js ${INPUT_DIR} ${INVENTORY_CSV} >> ${LOG_FILE} 2>&1"
+        //                 sh "echo 'Inventory and classification completed' >> ${LOG_FILE}"
+        //             } catch (Exception e) {
+        //                 sh "echo 'Error in Inventory and Classify: ${e}' >> ${LOG_FILE}"
+        //                 error "Inventory and Classify failed: ${e}"
+        //             }
+        //         }
+        //     }
+        // }
+
+        stage('Organize Files') {
             steps {
                 script {
                     try {
-                        echo "Running Ansible playbook..."
-                        sh "ansible-playbook archivosorganizados.yml >> ${LOG_FILE} 2>&1"
-                        sh "echo 'Ansible playbook execution completed' >> ${LOG_FILE}"
+                        sh "${PATH_ANSIBLE}/ansible-playbook -i ${WORKSPACE}/inventory ${WORKSPACE}/playbooks/archivosorganizados.yml >> ${LOG_FILE} 2>&1"
+                        sh "echo 'File organization completed' >> ${LOG_FILE}"
                     } catch (Exception e) {
-                        sh "echo 'Error in Ansible Playbook: ${e}' >> ${LOG_FILE}"
-                        error "Ansible Playbook failed: ${e}"
+                        sh "echo 'Error in Organize Files: ${e}' >> ${LOG_FILE}"
+                        error "Organize Files failed: ${e}"
                     }
                 }
             }
+        }
+
+        // stage('Deduplicate') {
+        //     steps {
+        //         script {
+        //             try {
+        //                 sh "${PATH_NODE}/node ${WORKSPACE}/scripts/deduplicate.js ${INVENTORY_CSV} >> ${LOG_FILE} 2>&1"
+        //                 sh "echo 'Deduplication report generated' >> ${LOG_FILE}"
+        //             } catch (Exception e) {
+        //                 sh "echo 'Error in Deduplicate: ${e}' >> ${LOG_FILE}"
+        //                 error "Deduplicate failed: ${e}"
+        //             }
+        //         }
+        //     }
+        // }
+    }
+
+    post {
+        always {
+            echo 'Pipeline completed'
+            sh "echo 'Pipeline finished: >> ${LOG_FILE}"
         }
     }
 }
