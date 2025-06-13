@@ -6,7 +6,8 @@
   gather_facts: false
   vars:
     db_script: "../scripts/db.js"
-    node_script: "../scripts/scanyclasifica.js" 
+    node_script: "../scripts/scanyclasifica.js"
+    dubplicate_script: "../scripts/deduplicate.js" 
     input_dir: "../archivos"
     file_path: "../file_inventory.csv"
     log_file: "../pipeline.log"
