@@ -3,96 +3,38 @@
   collections:
     - community.general
   gather_facts: false
-  become: true
+  become: false  # No need for sudo in local testing
+
   vars:
-     workspace_dir: "{{ playbook_dir | dirname }}"
-     base_dir: "{{ workspace_dir }}/playbooks/archivos_organizados"   
-     archive_patterns:
+    workspace_dir: "{{ playbook_dir | dirname }}"
+    destination_dir: "/Users/devmike/nas_simulado"
+    base_dir: "{{ workspace_dir }}/archivos_organizados"
+    archive_patterns:
       - '*.log'
       - '*.mp4'
       - '*.jpg'
-     backup_dir: /mnt/nas_backup
-     smb_server: 10.128.2.97
-     smb_share: public
-     smb_user: dept.dis
-     smb_password: maxelltod
-  
+    backup_dir: "{{ destination_dir }}"  # Local folder simulation
+
   tasks:
-  
-    - name: Get mount info
-      ansible.builtin.command: mount | grep '/mnt/nas_backup'
-      register: mount_info
-      changed_when: false
-      failed_when: mount_info.rc != 0
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ backup_dir }}"
+        state: directory
+        mode: '0755'
 
-    - name: Show mount result
-      debug:
-        var: mount_info.stdout
+    - name: Find files to backup
+      ansible.builtin.find:
+        paths: "{{ base_dir }}"
+        patterns: "{{ archive_patterns }}"
+        recurse: yes
+      register: files_to_backup
 
-    #  - name: Search for archive files
-    #    ansible.builtin.stat:
-    #     path: "{{ backup_dir }}              "               
-    #     # patterns: "{{ archive_patterns }}"
-    #    register: found_archives
-    #  - name: if file exists
-    #    debug:
-    #      msg: "File exists"
-    #    when: found_archives.stat.exists | default(false)
+    - name: Copy files to simulated NAS
+      ansible.builtin.copy:
+        src: "{{ item.path }}"
+        dest: "{{ backup_dir }}/"
+      loop: "{{ files_to_backup.files }}"
 
-    #  - name: if file not exists
-    #    debug:
-    #      msg: "File not exists"
-    #    when: not found_archives.stat.exists | default(false)
-
-    # - name: Ensure the mount point exists
-    #   file:
-    #     path: "{{ smb_mount_point }}"
-    #     state: directory
-    #     mode: '0755'
-
-    # - name: Debug NAS backup paths
-    #   ansible.builtin.debug:
-    #     msg: "Source: {{ workspace_dir }}, NAS: {{ nas_dir }}"
-    #   delegate_to: localhost
-
-    # - name: Create NAS backup directory
-    #   file:
-    #     path: "{{ nas_dir }}/2025Campain"        
-    #     state: directory
-    #     owner: dept.dis
-    #     group: WORKGROUP
-    #     mode: '0755'
-    #   delegate_to: localhost
-
-    # - name: Verify source directory
-    #   stat:
-    #     path: "{{ workspace_dir }}"
-    #   register: source_stat
-    #   delegate_to: localhost
-
-    # - name: Log source missing warning
-    #   ansible.builtin.shell: echo "Warning Source directory {{ base_dir }} not found, skipping NAS backup $(date)" >> "{{ log_file }}"
-    #   delegate_to: localhost
-    #   when: not csv_stat.stat.exists | default(false)
-
-    # - name: Copy files to NAS
-    #   ansible.builtin.copy:
-    #     src: "{{ item }}"
-    #     dest: "{{ nas_dir }}/{{ item | relpath(base_dir) }}"
-    #     mode: '0644'
-    #   loop: "{{ lookup('fileglob', base_dir + '/**/*.{mp4,jpg}', wantlist=True) }}"
-    #   when: source_stat.stat.exists
-    #   register: copy_result
-
-    # - name: Log backup actions
-    #   ansible.builtin.shell: |
-    #     node -e "const { logNasBackup } = require('{{ db_script }}'); logNasBackup('{{ item.src }}', '{{ item.dest }}').then(() => console.log('Logged backup for {{ item.src }}')).catch(err => console.error('Error logging backup: ', err));"
-    #     echo "Backed up {{ item.src }} to {{ item.dest }}: $(date)" >> "{{ log_file }}"
-    #   loop: "{{ copy_result.results | select('changed') | list }}"
-    #   delegate_to: localhost
-    #   when: source_stat.stat.exists
-
-    # - name: Log backup completion
-    #   ansible.builtin.shell: echo "NAS backup completed: $(date)" >> "{{ log_file }}"
-    #   delegate_to: localhost
-    #   when: source_stat.stat.exists
+    - name: Log backup completion
+      ansible.builtin.shell: |
+        echo "Backup completed at $(date)" >> "{{ destination_dir }}/backup.log"

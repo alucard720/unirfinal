@@ -1,55 +1,38 @@
-- name: Migrate files to Google Drive
-  hosts: migration_server
+---
+- name: Migrate Files to Google Drive
+  hosts: localhost
+  gather_facts: false
   vars:
-    app_dir: /app
-    log_file: pipeline.log
+    migracionadrive_script: "../scripts/migracionadrive.js"
+    file_path: "../file_inventory.csv"
+    log_file: "../pipeline.log"
+
   tasks:
-    - name: Validate files
-      stat:
-        path: "{{ item }}"
-      register: file_stat
-      loop:
-        - scripts/migracionadrive.js
-        - scripts/db.js
-        - credenciales.json
-        - file_inventory.csv
-      failed_when: not file_stat.stat.exists
-      delegate_to: localhost
+    - name: Check if file_inventory.csv exists
+      ansible.builtin.stat:
+        path: "{{ file_path }}"
+      register: csv_stat
 
-    - name: Log start
-      ansible.builtin.shell: echo "Starting migration $(date)" >> {{ log_file }}
-      delegate_to: localhost
+    - name: Log warning if CSV does not exist
+      ansible.builtin.shell: |
+        echo "Warning: {{ file_path }} not found, skipping migration: $(date)" >> "{{ log_file }}"
+      when: not csv_stat.stat.exists | default(false)
 
-    - name: Install Node.js
-      package:
-        name: nodejs
-        state: present
-
-    - name: Install npm
-      package:
-        name: npm
-        state: present
-
-    - name: Copy migration scripts and credentials
-      copy:
-        src: "{{ item.src }}"
-        dest: "{{ item.dest }}"
-        mode: '0644'
-      loop:
-        - { src: 'scripts/', dest: '{{ app_dir }}/scripts/' }
-        - { src: 'credentials.json', dest: '{{ app_dir }}/credentials.json' }
-        - { src: 'file_inventory.csv', dest: '{{ app_dir }}/file_inventory.csv' }
-
-    - name: Install Node.js dependencies
-      npm:
-        path: "{{ app_dir }}"
-        state: present
-
-    - name: Run migration script
-      command: node {{ app_dir }}/scripts/migracionadrive.js {{ app_dir }}/file_inventory.csv
+    - name: Run migration script if CSV exists
+      ansible.builtin.shell: |
+        node {{ migracionadrive_script }} {{ file_path }}
+      args:
+        chdir: "{{ playbook_dir }}"
       register: migration_result
+      when: csv_stat.stat.exists | default(false)
       failed_when: migration_result.rc != 0
 
-    - name: Log completion
-      ansible.builtin.shell: echo "Migration completed: $(date)" >> {{ log_file }}
-      delegate_to: localhost
+    - name: Log migration execution
+      ansible.builtin.shell: |
+        echo "Migration script executed: $(date)" >> "{{ log_file }}"
+      when: csv_stat.stat.exists | default(false)
+
+    - name: Show migration output
+      debug:
+        var: migration_result.stdout
+      when: csv_stat.stat.exists | default(false)

@@ -7,11 +7,18 @@
   vars:
     db_script: "../scripts/db.js"
     node_script: "../scripts/scanyclasifica.js"
-    dubplicate_script: "../scripts/deduplicate.js" 
+    duplicate_script: "../scripts/deduplicate.js" 
+    migracionadrive_script: "../scripts/migracionadrive.js"
     input_dir: "../archivos"
     file_path: "../file_inventory.csv"
     log_file: "../pipeline.log"
-    base_dir: "../archivos_organizados"
+    destination_dir: "../archivos_organizados"
+    backup_dir: "/Users/devmike/nas_simulado"
+    archive_patterns:
+      - '*.log'
+      - '*.mp4'
+      - '*.jpg'
+   
 
   tasks:
     - name: Run DB Initialization Script
@@ -24,6 +31,29 @@
     - name: Log DB Initialization
       ansible.builtin.shell: |
         echo "DB Initialization script executed: $(date)" >> "{{ log_file }}"
+
+    - name: Ensure backup directory exists
+      ansible.builtin.file:
+        path: "{{ backup_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Find files to backup
+      ansible.builtin.find:
+        paths: "{{ input_dir }}"
+        patterns: "{{ archive_patterns }}"
+        recurse: yes
+      register: files_to_backup
+
+    - name: Copy files to simulated NAS
+      ansible.builtin.copy:
+        src: "{{ item.path }}"
+        dest: "{{ backup_dir }}/"
+      loop: "{{ files_to_backup.files }}"
+
+    - name: Log backup completion
+      ansible.builtin.shell: |
+        echo "Backup completed at $(date)" >> "{{ backup_dir }}/backup.log"
 
     - name: Check if file_inventory.csv exists
       ansible.builtin.stat:
@@ -67,7 +97,7 @@
 
     - name: Create target folders
       ansible.builtin.file:
-        path: "{{ base_dir }}/{{ item.client }}/{{ item.project }}/{{ 'Videos' if item.extension == '.mp4' else 'Designs' }}"
+        path: "{{ destination_dir }}/{{ item.client }}/{{ item.project }}/{{ 'Videos' if item.extension == '.mp4' else 'Designs' }}"
         state: directory
         mode: '0755'
       loop: "{{ (files | default([])) | unique(attribute='path') }}"
@@ -75,7 +105,7 @@
 
     - name: Move files to target folders
       ansible.builtin.command: >
-        mv "{{ item.path }}" "{{ base_dir }}/{{ item.client }}/{{ item.project }}/{{ 'Videos' if item.extension == '.mp4' else 'Designs' }}/"
+        mv "{{ item.path }}" "{{ destination_dir }}/{{ item.client }}/{{ item.project }}/{{ 'Videos' if item.extension == '.mp4' else 'Designs' }}/"
       loop: "{{ files | default([]) }}"
       when: item.extension in ['.mp4', '.jpg'] and files is defined
       register: move_result
@@ -83,10 +113,29 @@
 
     - name: Log each file move
       ansible.builtin.shell: |
-        echo "Moved {{ item.item.path }} to {{ base_dir }}/{{ item.item.client }}/{{ item.item.project }}/{{ 'Videos' if item.item.extension == '.mp4' else 'Designs' }}" >> "{{ log_file }}"
+        echo "Moved {{ item.item.path }} to {{ destination_dir }}/{{ item.item.client }}/{{ item.item.project }}/{{ 'Videos' if item.item.extension == '.mp4' else 'Designs' }}" >> "{{ log_file }}"
       loop: "{{ move_result.results }}"
       when: item.rc == 0
       delegate_to: localhost
+
+    - name: Run deduplication script
+      ansible.builtin.shell: |
+        node {{ duplicate_script }}
+      args:
+        chdir: "{{ playbook_dir }}"
+      register: deduplication_result
+
+    - name: Log deduplication result
+      ansible.builtin.shell: |
+        echo "Deduplication script executed: $(date)" >> "{{ log_file }}"
+      delegate_to: localhost
+
+    - name : Migrate files to Google Drive
+      ansible.builtin.shell: |
+        node {{ migracionadrive_script }} 
+      args:
+        chdir: "{{ playbook_dir }}"
+      register: migracionadrive_result
 
     - name: Log completion
       ansible.builtin.shell: |
