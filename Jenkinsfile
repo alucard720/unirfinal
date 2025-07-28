@@ -18,49 +18,24 @@ pipeline {
                 script {
                     sh "echo 'Starting pipeline' >> ${LOG_FILE}"
 
+                    // Validate Node.js and Ansible installation
                     sh "node -v || { echo 'Node.js not found' >> ${LOG_FILE}; exit 1; }"
                     sh "npm -v || { echo 'npm not found' >> ${LOG_FILE}; exit 1; }"
+                    // sh "ansible --version || { echo 'Ansible not found' >> ${LOG_FILE}; exit 1; }"
 
-                    // Database init
-                    retry(2) {
-                        sh "node scripts/db.js >> ${LOG_FILE} 2>&1"
-                    }
+                  
+                    // // Install Node.js dependencies
+                    // sh "npm install >> ${LOG_FILE} 2>&1"
 
-                    // Backup NAS
-                    retry(2) {
-                        sh "${ANSIBLE_PATH} -i inventory playbooks/backup_nas.yml >> ${LOG_FILE} 2>&1"
-                    }
+                    // Explicitly use full node path to be 100% sure
+                    sh "${ANSIBLE_PATH}  -i inventory playbooks/archivosorganizados.yml"
 
-                    // Organize files
-                    retry(2) {
-                        sh "${ANSIBLE_PATH} -i inventory playbooks/archivosorganizados.yml >> ${LOG_FILE} 2>&1"
-                    }
-
-                    // Google Drive migration
-                    retry(2) {
-                        sh "${ANSIBLE_PATH} -i inventory playbooks/migracionaldrive.yml >> ${LOG_FILE} 2>&1"
-                    }
-
-                    sh "echo 'Pipeline completed successfully' >> ${LOG_FILE}"
+                    sh "echo 'Setup completed' >> ${LOG_FILE}"
                 }
             }
         }
     }
+    
 
-    post {
-        success {
-            script {
-                if (env.SLACK_ENABLED == "true") {
-                    slackSend(channel: '#notifications', message: "✅ Pipeline completed successfully: ${env.JOB_NAME} #${env.BUILD_NUMBER}")
-                }
-            }
-        }
-        failure {
-            script {
-                if (env.SLACK_ENABLED == "true") {
-                    slackSend(channel: '#notifications', message: "❌ Pipeline failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}")
-                }
-            }
-        }
-    }
 }
+    
