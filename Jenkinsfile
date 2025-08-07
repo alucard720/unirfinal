@@ -18,6 +18,7 @@ pipeline {
                 script {
                     sh "echo 'Starting pipeline' >> ${LOG_FILE}"
 
+                    // Validate Node.js and Ansible installation
                     sh "node -v || { echo 'Node.js not found' >> ${LOG_FILE}; exit 1; }"
                     sh "npm -v || { echo 'npm not found' >> ${LOG_FILE}; exit 1; }"
 
@@ -38,7 +39,7 @@ pipeline {
 
                     // Google Drive migration
                     retry(2) {
-                        sh "node scripts/migraciondrive.js >> ${LOG_FILE} 2>&1"
+                        sh "${ANSIBLE_PATH} -i inventory playbooks/migracionaldrive.yml >> ${LOG_FILE} 2>&1"
                     }
 
                     sh "echo 'Pipeline completed successfully' >> ${LOG_FILE}"
@@ -46,21 +47,7 @@ pipeline {
             }
         }
     }
+    
 
-    post {
-        success {
-            script {
-                if (env.SLACK_ENABLED == "true") {
-                    slackSend(channel: '#notifications', message: "✅ Pipeline completed successfully: ${env.JOB_NAME} #${env.BUILD_NUMBER}")
-                }
-            }
-        }
-        failure {
-            script {
-                if (env.SLACK_ENABLED == "true") {
-                    slackSend(channel: '#notifications', message: "❌ Pipeline failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}")
-                }
-            }
-        }
-    }
 }
+    

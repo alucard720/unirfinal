@@ -1,0 +1,53 @@
+pipeline {
+    agent any
+    tools {
+        nodejs "NodeJS_20"  // nombre de la instalación Node en Jenkins
+    }
+    environment {
+        NODE_ENV = "production"
+    }
+    stages {
+        stage('Install dependencies') {
+            steps {
+                echo "Instalando dependencias NPM..."
+                sh 'npm install'
+            }
+        }
+        stage('Scan & Classify Files') {
+            steps {
+                echo "Ejecutando scanyclasifica.js..."
+                sh 'node scanyclasifica.js ../archivos ../file_inventory.csv'
+            }
+        }
+        stage('Deduplicate Files') {
+            steps {
+                echo "Ejecutando deduplicate.js..."
+                sh 'node deduplicate.js file_inventory.csv --delete'
+            }
+        }
+        stage('Migrate to Google Drive') {
+            steps {
+                echo "Ejecutando migracionadrive.js..."
+                sh 'node migracionadrive.js file_inventory.csv'
+            }
+        }
+        stage('Verify Migration') {
+            steps {
+                echo "Ejecutando verificacionmigracion.js..."
+                sh 'node verificacionmigracion.js file_inventory.csv'
+            }
+        }
+    }
+    post {
+        always {
+            echo "Pipeline finalizado. Mostrando logs recientes..."
+            sh 'tail -n 50 pipeline.log || true'
+        }
+        failure {
+            echo "Pipeline falló. Revisar logs."
+        }
+        success {
+            echo "Pipeline ejecutado con éxito."
+        }
+    }
+}
