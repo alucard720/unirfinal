@@ -38,7 +38,7 @@ pipeline {
 
                     // Google Drive migration
                     retry(2) {
-                        sh "${ANSIBLE_PATH} -i inventory playbooks/migracionaldrive.yml >> ${LOG_FILE} 2>&1"
+                        sh "node scripts/migraciondrive.js >> ${LOG_FILE} 2>&1"
                     }
 
                     sh "echo 'Pipeline completed successfully' >> ${LOG_FILE}"
