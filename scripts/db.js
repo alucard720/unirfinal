@@ -1,32 +1,38 @@
 const sqlite3 = require('sqlite3').verbose();
-const fs = require('fs').promises;
+const logger = require('./logger');
 
-const logFile = 'pipeline.log';
+let dbInstance = null;
 
 async function initializeDb() {
-    const db = new sqlite3.Database('file_activity.db', (err) => {
-        if (err) {
-            fs.appendFile(logFile, `DB Connection Error: ${err}\n`);
-            throw err;
-        }
-    });
+    if (dbInstance) return dbInstance;
 
-    // Synchronous table creation
-    db.serialize(() => {
-        db.run(`CREATE TABLE IF NOT EXISTS activity (
-            timestamp TEXT,
-            user TEXT,
-            action TEXT,
-            file_path TEXT
-        )`, (err) => {
+    return new Promise((resolve, reject) => {
+        const db = new sqlite3.Database('db/file_activity.db', (err) => {
             if (err) {
-                fs.appendFile(logFile, `Table Creation Error: ${err}\n`);
-                throw err;
+                logger.error(`DB Connection Error: ${err}`);
+                return reject(err);
             }
+            db.serialize(() => {
+                db.run(
+                    `CREATE TABLE IF NOT EXISTS activity (
+                        timestamp TEXT,
+                        user TEXT,
+                        action TEXT,
+                        file_path TEXT
+                    )`,
+                    (tableErr) => {
+                        if (tableErr) {
+                            logger.error(`Table Creation Error: ${tableErr}`);
+                            return reject(tableErr);
+                        }
+                        dbInstance = db;
+                        logger.info('Database initialized');
+                        resolve(db);
+                    }
+                );
+            });
         });
     });
-
-    return db;
 }
 
 async function logAction(action, filePath) {
@@ -36,13 +42,12 @@ async function logAction(action, filePath) {
             `INSERT INTO activity (timestamp, user, action, file_path) VALUES (?, ?, ?, ?)`,
             [new Date().toISOString(), 'system', action, filePath],
             (err) => {
-                db.close();
                 if (err) {
-                    fs.appendFile(logFile, `DB Insert Error: ${err}\n`);
-                    reject(err);
-                } else {
-                    resolve();
+                    logger.error(`DB Insert Error: ${err}`);
+                    return reject(err);
                 }
+                logger.info(`Action logged: ${action} -> ${filePath}`);
+                resolve();
             }
         );
     });

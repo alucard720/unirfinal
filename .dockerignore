@@ -1,0 +1,14 @@
+node_modules
+npm-debug.log
+pipeline.log
+file_activity.db
+*.csv
+*.txt
+*.log
+.credentials
+credenciales.json
+credentials.json
+.git
+.github
+.gitignore
+.DS_Store
