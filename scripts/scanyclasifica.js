@@ -6,7 +6,11 @@ const crypto = require('crypto');
 const md5File = require('md5-file');
 const { logAction } = require('./db');
 const logger = require('./logger');
+<<<<<<< HEAD
 const { log } = require('console');
+=======
+// const { log } = require('console');
+>>>>>>> 2c0709f0bb13065595387aced64dd128f8187608
 
 const inputDir = process.argv[2] || '../archivos';
 const outputCsv = process.argv[3] || '../file_inventory.csv';

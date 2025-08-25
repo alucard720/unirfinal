@@ -1,0 +1,75 @@
+pipeline {
+    agent any
+    
+        
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+    
+    environment {
+        unirfinal = "${WORKSPACE}"
+        INPUT_DIR = "${WORKSPACE}/archivos"
+        INVENTORY_CSV = "${WORKSPACE}/file_inventory.csv"
+        LOG_FILE = "${WORKSPACE}/pipeline.log"
+        SLACK_ENABLED = "true"
+        NODE_ENV = 'production'
+    }
+    
+    stages {
+       
+        
+        stage('Setup') {
+            steps {
+                stage('setup nodejs') {
+                    steps {
+                        sh '''
+                        export PATH=$PATH:/usr/local/bin
+                        '''
+                    }
+                }
+                
+                script {
+                    // Clean previous artifacts
+                    sh "rm -f ${LOG_FILE} ${INVENTORY_CSV}"
+                    
+                    sh "echo 'Starting pipeline at \$(date)' >> ${LOG_FILE}"
+                    sh "echo 'Workspace: ${WORKSPACE}' >> ${LOG_FILE}"
+                    
+                    // Validate environment
+                    sh "node -v >> ${LOG_FILE} 2>&1"
+                    sh "npm -v >> ${LOG_FILE} 2>&1"
+                    sh "ansible --version >> ${LOG_FILE} 2>&1"
+                    
+                    // Validate required files and directories
+                    sh "test -d ${INPUT_DIR} || { echo 'Input directory not found' >> ${LOG_FILE}; exit 1; }"
+                    sh "test -f package.json || { echo 'package.json not found' >> ${LOG_FILE}; exit 1; }"
+                    sh "test -f scripts/db.js || { echo 'db.js script not found' >> ${LOG_FILE}; exit 1; }"
+                    
+                    // Install dependencies
+                    sh "npm ci >> ${LOG_FILE} 2>&1"
+                    
+                    // Initialize database
+                    sh "node scripts/db.js >> ${LOG_FILE} 2>&1"
+                    
+                    sh "echo 'Setup completed at \$(date)' >> ${LOG_FILE}"
+                }
+            }
+        }
+        
+        
+    }
+    
+    post {
+        always {
+            sh "echo 'Pipeline finished at \$(date)' >> ${LOG_FILE}"
+            archiveArtifacts artifacts: '*.log,*.csv', allowEmptyArchive: true
+        }
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+        failure {
+            echo 'Pipeline failed - check logs for details'
+        }
+    }
+}

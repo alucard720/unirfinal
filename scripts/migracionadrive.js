@@ -3,9 +3,9 @@ const path = require('path');
 const { google } = require('googleapis');
 const { parse } = require('csv-parse/sync');
 const { logAction } = require('./db');
+const logger = require('./logger');
 
 const csvPath = process.argv[2] || 'file_inventory.csv';
-const logFile = 'pipeline.log';
 
 async function authenticate() {
     try {
@@ -16,7 +16,7 @@ async function authenticate() {
         });
         return await auth.getClient();
     } catch (err) {
-        await fs.appendFile(logFile, `Error authenticating with Google Drive: ${err}\n`);
+        logger.error(`Error authenticating with Google Drive: ${err}`);
         process.exit(1);
     }
 }
@@ -25,18 +25,13 @@ async function getFolderId(drive, name, parentId) {
     try {
         const query = `name='${name}' and mimeType='application/vnd.google-apps.folder'${parentId ? ` and '${parentId}' in parents` : ''}`;
         const res = await drive.files.list({ q: query, fields: 'files(id)' });
-        if (res.data.files.length > 0) {
-            return res.data.files[0].id;
-        }
-        const fileMetadata = {
-            name,
-            mimeType: 'application/vnd.google-apps.folder',
-            parents: parentId ? [parentId] : []
-        };
+        if (res.data.files.length > 0) return res.data.files[0].id;
+
+        const fileMetadata = { name, mimeType: 'application/vnd.google-apps.folder', parents: parentId ? [parentId] : [] };
         const folder = await drive.files.create({ resource: fileMetadata, fields: 'id' });
         return folder.data.id;
     } catch (err) {
-        await fs.appendFile(logFile, `Error creating folder ${name}: ${err}\n`);
+        logger.error(`Error creating folder ${name}: ${err}`);
         throw err;
     }
 }
@@ -47,7 +42,7 @@ async function checkExistingFile(drive, name, parentId) {
         const res = await drive.files.list({ q: query, fields: 'files(id, md5Checksum)' });
         return res.data.files;
     } catch (err) {
-        await fs.appendFile(logFile, `Error checking file ${name}: ${err}\n`);
+        logger.error(`Error checking file ${name}: ${err}`);
         return [];
     }
 }
@@ -58,24 +53,26 @@ async function uploadFile(drive, filePath, folderId, localPath) {
         const existingFiles = await checkExistingFile(drive, fileName, folderId);
         if (existingFiles.length > 0) {
             await logAction(`Skipped upload (file exists): ${fileName}`, localPath);
-            await fs.appendFile(logFile, `Skipped upload: ${fileName}\n`);
+            logger.warn(`Skipped upload: ${fileName}`);
             return;
         }
         const fileMetadata = { name: fileName, parents: [folderId] };
         const media = { body: require('fs').createReadStream(filePath) };
         await drive.files.create({ resource: fileMetadata, media, fields: 'id' });
         await logAction(`Uploaded file: ${fileName}`, localPath);
-        await fs.appendFile(logFile, `Uploaded file: ${fileName}\n`);
+        logger.info(`Uploaded file: ${fileName}`);
     } catch (err) {
-        await fs.appendFile(logFile, `Error uploading ${filePath}: ${err}\n`);
+        logger.error(`Error uploading ${filePath}: ${err}`);
         throw err;
     }
 }
 
 async function migrateToDrive() {
     try {
-        if (!await fs.access(csvPath).then(() => true).catch(() => false)) {
-            await fs.appendFile(logFile, `CSV file ${csvPath} does not exist\n`);
+        try {
+            await fs.access(csvPath);
+        } catch {
+            logger.error(`CSV file ${csvPath} does not exist`);
             process.exit(1);
         }
 
@@ -85,7 +82,7 @@ async function migrateToDrive() {
         const files = parse(csvContent, { columns: true });
 
         if (files.length === 0) {
-            await fs.appendFile(logFile, 'No files to migrate\n');
+            logger.warn('No files to migrate');
             return;
         }
 
@@ -103,9 +100,9 @@ async function migrateToDrive() {
             await uploadFile(drive, localPath, typeId, localPath);
         }
 
-        await fs.appendFile(logFile, 'Migration completed\n');
+        logger.info('Migration completed');
     } catch (err) {
-        await fs.appendFile(logFile, `Error in migrate_to_drive: ${err}\n`);
+        logger.error(`Error in migrate_to_drive: ${err}`);
         process.exit(1);
     }
 }

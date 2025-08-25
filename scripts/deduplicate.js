@@ -12,7 +12,7 @@ async function deduplicateFiles() {
     try {
         if (!await fs.access(csvPath).then(() => true).catch(() => false)) {
             await fs.appendFile(logFile, `CSV file ${csvPath} does not exist\n`);
-            process.exit(1);
+            process.exit(0);
         }
 
         // Read and parse CSV file
@@ -21,7 +21,7 @@ async function deduplicateFiles() {
 
         if (files.length === 0) {
             await fs.appendFile(logFile, 'No files in CSV\n');
-            return;
+            process.exit(0);
         }
 
         const duplicates = files.filter((file, index, self) =>
@@ -29,7 +29,7 @@ async function deduplicateFiles() {
         );
         if (duplicates.length === 0) {
             await fs.appendFile(logFile, 'No duplicates found\n');
-            return;
+            process.exit(0);
         }
 
         // Get modification times asynchronously
