@@ -56,6 +56,7 @@
         echo "Backup completed at $(date)" >> "{{ backup_dir }}/backup.log"
 
     - name: Check if file_inventory.csv exists
+
       ansible.builtin.stat:
         path: "{{ file_path }}"
       register: csv_stat

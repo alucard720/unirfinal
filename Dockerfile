@@ -1,28 +1,24 @@
-# Imagen base con Python y Node.js
-FROM python:3.13-slim
+# Dockerfile
+FROM node:20-alpine
 
-# Instalar Node.js, npm, y dependencias necesarias
-RUN apt-get update && \
-    apt-get install -y curl gnupg2 build-essential && \
-    curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
-    apt-get install -y nodejs && \
-    apt-get install -y sshpass
+# Dependencias básicas
+RUN apk add --no-cache git bash
 
-# Instalar Ansible y dependencias de community.general
-RUN pip install --no-cache-dir ansible && \
-    ansible-galaxy collection install community.general
-
-# Crear directorio de trabajo
+# Carpeta de trabajo
 WORKDIR /app
 
-# Copiar scripts, playbooks, inventario y archivos necesarios
-COPY . /app
+# Copiar package.json primero para aprovechar la caché
+COPY package*.json ./
+RUN npm ci --only=production || npm ci
 
-# Establecer permisos si es necesario
-RUN chmod -R 755 /app
+# Copiar el resto del proyecto
+COPY . .
 
-# Instalar dependencias Node.js si las tienes
-RUN if [ -f package.json ]; then npm install; fi
+# Instalar PM2 globalmente
+RUN npm i -g pm2
 
-# Comando por defecto: ejecutar el playbook
-CMD ["ansible-playbook", "-i", "inventory", "playbooks/archivosorganizados.yml"]
+# Variables de entorno
+ENV NODE_ENV=production
+
+# Comando por defecto (muestra ayuda, se puede overridear con docker run)
+CMD ["bash", "-lc", "echo 'Imagen lista. Usa pm2 o node <script>.js para correr procesos.' && pm2 -v && node -v"]
