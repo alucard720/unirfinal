@@ -1,0 +1,91 @@
+@startuml
+title Arquitectura - Pipeline de Clasificación, Deduplicación y Migración
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam wrapWidth 200
+skinparam maxMessageSize 80
+skinparam ArrowColor #888888
+skinparam ArrowThickness 1
+
+actor "Operador" as Op
+
+rectangle "Origen Local" as Origen {
+  folder "Carpeta de entrada\n../archivos" as InDir
+  node "NAS simulado\n(Respaldo)" as NAS
+}
+
+component "scanyclasifica.js" as Scan
+component "deduplicate.js" as Dedup
+component "migracionadrive.js" as Migrate
+component "verificacionmigracion.js" as Verify
+component "logger.js\n(Winston)" as Logger
+database "SQLite\nfile_activity.db" as DB
+file "pipeline.log" as Log
+file "file_inventory.csv" as CSV
+file "duplicates_report.csv" as DupRpt
+file "migration_verification_report.txt" as VerRpt
+
+package "Orquestación / Ejecución" as Orq {
+  component "PM2\n(cron interno)" as PM2
+  component "Jenkins\n(Pipeline CI/CD)" as Jenkins
+  component "Ansible Playbook\n(backup/organización)" as Ansible
+}
+
+cloud "Google Drive\n(API v3)" as GDrive
+
+' --- Relaciones de orquestación ---
+Op --> Jenkins : Ejecuta pipeline / consulta estado
+Jenkins --> PM2 : (opcional) startOrReload\necosystem.config.js
+Jenkins --> Ansible : ansible-playbook\n(playbook principal)
+
+' --- Flujo principal ---
+InDir --> Scan : 1) Escaneo y hashing\n(.mp4: MD5 / .jpg: Sharp+MD5)
+Scan --> CSV : Genera inventario
+Scan --> Logger : info/error
+Logger --> Log
+Scan --> DB : logAction()
+
+CSV --> Dedup : 2) Detección de duplicados
+Dedup --> DupRpt : Reporte duplicados
+Dedup --> Logger
+Dedup --> DB
+
+CSV --> Migrate : 3) Migración a Drive
+Migrate --> GDrive : Subir archivos\ncrear jerarquía\nCliente/Proyecto/Tipo
+Migrate --> Logger
+Migrate --> DB
+
+CSV --> Verify : 4) Verificación de migración
+Verify --> GDrive : Listado/consulta
+Verify --> VerRpt
+Verify --> Logger
+Verify --> DB
+
+' --- Respaldo con Ansible ---
+Ansible --> NAS : Copia de seguridad de archivos\n(logs/mp4/jpg)
+Ansible --> Logger
+Ansible --> DB
+
+' --- PM2 programa ejecuciones ---
+PM2 -[#9999]- Scan : cron cada hora
+PM2 -[#9999]- Dedup : cron 02:00
+PM2 -[#9999]- Migrate : cron 03:00
+PM2 -[#9999]- Verify : cron 04:00
+
+' --- Notas ---
+note right of GDrive
+Estructura destino:
+Cliente / Proyecto / {Videos|Designs}
+end note
+
+legend left
+  == Leyenda ==
+  1) Scan -> CSV
+  2) Dedup -> Duplicados
+  3) Migrate -> Google Drive
+  4) Verify -> Reporte verificación
+  Logger (Winston) -> pipeline.log
+  Auditoría -> SQLite (file_activity.db)
+endlegend
+@enduml
